@@ -295,23 +295,5 @@ for batch_id, batch_data in enumerate(train_loader):
     similarity_df.to_csv(f"{folder_path}similarity_data.csv", index=False)
     
     i=i+1
-
-
         
         
-# for bc, samples in enumerate(train_loader):
-#     if i==ls[z]:
-#         z=z+1
-#         masks = create_batch_mask(samples)
-#         solute_sublist,solvent_sublist = model.get_subgraph([samples[0].to(device), samples[1].to(device), masks[0].to(device), masks[1].to(device)],bottleneck=True)
-#         mol = Chem.MolFromSmiles(df.iloc[i]["smiles_1"])
-#         solu_atom_num=mol.GetNumAtoms()
-#         mol.RemoveAllConformers()
-#         print(solute_sublist)
-#         for j in range(len(solute_sublist)):
-#             solvent_fig = SimilarityMaps.GetSimilarityMapFromWeights(mol,solute_sublist[j].cpu().detach().numpy() ,colorMap='RdBu',
-#                                                             alpha=0.05,
-#                         size=(200,200))
-#             solvent_fig.savefig("solute/"+str(i)+"/"+df.iloc[i]["smiles_1"]+"/solute{}.png".format(j), bbox_inches='tight', dpi=600)
-#     i = i+1
-# #print(1)
