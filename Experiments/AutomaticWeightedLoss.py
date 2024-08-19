@@ -4,17 +4,6 @@ import torch
 import torch.nn as nn
 
 class AutomaticWeightedLoss(nn.Module):
-    """automatically weighted multi-task loss
-
-    Params：
-        num: int，the number of loss
-        x: multi-task loss
-    Examples：
-        loss1=1
-        loss2=2
-        awl = AutomaticWeightedLoss(2)
-        loss_sum = awl(loss1, loss2)
-    """
     def __init__(self, num=2,use_uncertainty=True,PRIMARY_TASK_INDEX=0, primary_task_weight=1.2):
         super(AutomaticWeightedLoss, self).__init__()
         self.use_uncertainty = use_uncertainty
@@ -29,7 +18,6 @@ class AutomaticWeightedLoss(nn.Module):
         if self.use_uncertainty:
             for i, loss in enumerate(x):
                 if i == self.PRIMARY_TASK_INDEX:
-                    # loss_sum += self.primary_task_weight * (0.5 / (self.params[i] ** 2) * loss + torch.log(1 + self.params[i] ** 2))
                     loss_sum += (self.primary_task_weight * 0.5 / (self.params[i] ** 2) )* loss + torch.log(1 + self.params[i] ** 2)
                 else:
                     loss_sum += 0.5 / (self.params[i] ** 2) * loss + torch.log(1 + self.params[i] ** 2)
