@@ -238,9 +238,9 @@ class GraphInformationBottleneckModule(nn.Module):
         # Prediction Y
         final_features = noisy_subgraphs
         # print("final_features shape:",final_features.shape)
-        predictions = self.predictor(final_features)
+        # predictions = self.predictor(final_features)
         # print("predictions shape:",predictions.shape)
-        return predictions, KL_Loss, preserve_rate, lambda_pos
+        return final_features, KL_Loss, preserve_rate, lambda_pos
     
     
     
@@ -330,10 +330,29 @@ class MTGL_ADMET(nn.Module):
             preserve_rate_all.append(preserve_rate)
             
         gib_feats_list = torch.cat(gib_feats_list, dim=1)
-        gib_prediction_all = gib_feats_list
         preserve_rate_all = torch.stack(preserve_rate_all).mean()
-        # gib  
-
+        
+        
+        # ATG
+        z_pri = gib_feats_list[self.prim_index]
+        similarity_scores = []
+        for i in range(self.task_num):
+            if i != self.prim_index:
+                sim_score = F.cosine_similarity(gib_feats_list[i], z_pri, dim=1)
+                similarity_scores.append((sim_score, i))
+        
+        similarity_scores.sort(key=lambda x: x[0], reverse=True)
+        filtered_tasks = [idx for score, idx in similarity_scores if score >= 0.7]
+        
+        if len(filtered_tasks) < 3:
+            selected_tasks = similarity_scores[:3]  
+        else:
+            selected_tasks = filtered_tasks
+        
+        selected_feats_list = [gib_feats_list[self.prim_index]] + [gib_feats_list[idx] for idx in selected_tasks]
+        
+        gating_combine_gib = self.compute_gating(bg, node_feats, selected_feats_list, git=False)
+        
         # 
         if self.return_weight:
             feats_list, atom_weight_list = self.weighted_sum_readout(bg, node_feats)
@@ -341,14 +360,15 @@ class MTGL_ADMET(nn.Module):
             feats_list = self.weighted_sum_readout(bg, node_feats)
         gating_combine = self.compute_gating(bg,node_feats,feats_list,git=False)
         # 
-        
         Pri_centered_feats_list = []
         Pri_centered_git_feats_list = []
         for i in range(self.task_num):
             if i == self.prim_index and self.use_primary_centered_gate == True:
                 Pri_centered_feats_list.append(gating_combine)
+                Pri_centered_git_feats_list.append(gating_combine_gib)
             else:
                 Pri_centered_feats_list.append(feats_list[i])
+                Pri_centered_git_feats_list.append(gib_feats_list[i])
 
         prediction_all = []
         # Multi-task predictor
@@ -359,6 +379,16 @@ class MTGL_ADMET(nn.Module):
             predict = self.output_layer1[i](h2)
             prediction_all.append(predict)
         prediction_all = torch.cat(prediction_all, dim=1)
+        
+        gib_prediction_all = []
+        # Multi-task predictor
+        for i in range(self.task_num):
+            mol_gib_feats = Pri_centered_git_feats_list[i]
+            h1 = self.fc_layers_git1[i](mol_gib_feats)
+            h2 = self.fc_layers_git2[i](h1)
+            predict = self.output_layer_git1[i](h2)
+            gib_prediction_all.append(predict)
+        gib_prediction_all = torch.cat(gib_prediction_all, dim=1)
             
         return prediction_all, gib_prediction_all, KL_loss_all, preserve_rate
 
