@@ -44,9 +44,6 @@ console.setFormatter(formatter)
 logging.getLogger('').addHandler(console)
 
 
-
-
-
 # 解析命令行参数
 def parse_args():
     parser = argparse.ArgumentParser(description='Run MTGL_ADMET with specified task list.')
@@ -142,7 +139,6 @@ logging.info("Hyperparameters:")
 print_args(args)
 
 import pandas as pd
-
 
 for time_id in range(args.times):
     set_random_seed(3407)
