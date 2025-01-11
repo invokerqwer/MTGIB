@@ -61,8 +61,6 @@ class NewResGCNLayer(nn.Module):
 
     def forward(self, bg, node_feats):
         new_feats = self.graph_conv_layer(bg, node_feats)
-        
-        # Apply dynamic residual connection
         if self.residual:
             if self.dynamic_residual:
                 res_weights = torch.sigmoid(self.res_connection(node_feats))
@@ -71,16 +69,12 @@ class NewResGCNLayer(nn.Module):
                 res_feats = self.activation(self.res_connection(node_feats))
             new_feats = new_feats + res_feats
         
-        # Apply feature dropout
         if self.feature_dropout > 0.0:
             new_feats = F.dropout(new_feats, p=self.feature_dropout, training=self.training)
         
-        # Apply attention mechanism
         if self.use_attention:
             attention_weights = torch.sigmoid(self.attention_layer(new_feats))
             new_feats = new_feats * attention_weights
-        
-        # Apply batch normalization
         if self.bn:
             new_feats = self.bn_layer(new_feats)
 
@@ -202,34 +196,24 @@ class GraphInformationBottleneckModule(nn.Module):
         lambda_pos = lambda_pos.reshape(-1, 1)
         lambda_neg = 1 - lambda_pos
 
-        # 获取 preserve_rate
         preserve_rate = (torch.sigmoid(p) > 0.5).float().mean()
 
-        # 克隆并分离 features
         static_feature = features.clone().detach()
         
-        # 获取批次索引
         batch_num_nodes = bg.batch_num_nodes()
         batch_index = torch.cat([torch.full((num,), i, dtype=torch.long) for i, num in enumerate(batch_num_nodes)]).to(features.device)
         
-        # 调试输出以确保索引和特征的长度匹配
-        # print(f"features shape: {features.shape}")
         # print(f"static_feature shape: {static_feature.shape}")
         # print(f"batch_index shape: {batch_index.shape}")
-        
-        # 计算均值和标准差
         node_feature_mean = scatter_mean(static_feature, batch_index, dim=0)[batch_index]
         node_feature_std = scatter_std(static_feature, batch_index, dim=0)[batch_index]
 
-        # 生成噪声特征
         noisy_node_feature_mean = lambda_pos * features + lambda_neg * node_feature_mean
         noisy_node_feature_std = lambda_neg * node_feature_std
         noisy_node_feature = noisy_node_feature_mean + torch.rand_like(noisy_node_feature_mean) * noisy_node_feature_std
 
-        # 使用 set2set 方法处理噪声特征
         noisy_subgraphs = self.set2set(noisy_node_feature, batch_index)
 
-        # 计算 KL 损失
         epsilon = 1e-7
         KL_tensor = 0.5 * scatter_add(((noisy_node_feature_std ** 2) / (node_feature_std + epsilon) ** 2).mean(dim=1), batch_index).reshape(-1, 1) + \
                     scatter_add((((noisy_node_feature_mean - node_feature_mean) / (node_feature_std + epsilon)) ** 2), batch_index, dim=0)
@@ -260,7 +244,6 @@ class MTGL_ADMET(nn.Module):
         self.return_weight = return_weight 
         self.weighted_sum_readout = WeightAndSum(gnn_out_feats, self.task_num, return_weight=self.return_weight)
         
-        # # Two-layer ResGCN
         self.conv1 = ResGCNLayer(in_feats, hidden_feats)
         self.conv2 = ResGCNLayer(hidden_feats, conv2_out_dim)
         self.conv3 = ResGCNLayer(conv2_out_dim, gnn_out_feats)
@@ -268,7 +251,6 @@ class MTGL_ADMET(nn.Module):
         # self.conv1 = NewResGCNLayer(in_feats, hidden_feats, dynamic_residual=True, use_attention=True, feature_dropout=0.2)
         # self.conv2 = NewResGCNLayer(hidden_feats, conv2_out_dim, dynamic_residual=True, use_attention=True, feature_dropout=0.2)
         # self.conv3 = NewResGCNLayer(conv2_out_dim, gnn_out_feats, dynamic_residual=True, use_attention=True, feature_dropout=0.2)
-
   
         self.gates = nn.ModuleList()
         for i in range(self.task_num):
@@ -285,9 +267,6 @@ class MTGL_ADMET(nn.Module):
                 self.gates_git.append(nn.Linear(gnn_out_feats, 2))
 
         self.fc_in_feats = gnn_out_feats 
-        for i in range(self.task_num):
-            self.fine_f = nn.ModuleList([self.fc_layer(dropout,gnn_out_feats, gnn_out_feats) for _ in range(self.task_num)])
-
         self.fc_layers1 = nn.ModuleList([self.fc_layer(dropout,self.fc_in_feats, classifier_hidden_feats) for _ in range(self.task_num)])
         self.fc_layers2 = nn.ModuleList(
             [self.fc_layer(dropout, classifier_hidden_feats, classifier_hidden_feats) for _ in range(self.task_num)])
@@ -300,11 +279,12 @@ class MTGL_ADMET(nn.Module):
         self.output_layer_git1 = nn.ModuleList(
             [self.output_layer(classifier_hidden_feats, 1) for _ in range(self.task_num)])
         
-        # self.graph_information_bottleneck_module = GraphInformationBottleneckModule(self.device,gnn_out_feats,gnn_out_feats)
         self.graph_information_bottleneck_module = nn.ModuleList(
             [self.gib_layer(device,gnn_out_feats) for _ in range(self.task_num)])
-        
+        self.min_aux_tasks = 2
+        self.similarity_threshold = 0.7
         self.init_model()
+
     
     def init_model(self):
         for m in self.modules():
@@ -333,27 +313,26 @@ class MTGL_ADMET(nn.Module):
         preserve_rate_all = torch.stack(preserve_rate_all).mean()
         
         
-        # ATG
-        z_pri = gib_feats_list[self.prim_index]
-        similarity_scores = []
-        for i in range(self.task_num):
-            if i != self.prim_index:
-                sim_score = F.cosine_similarity(gib_feats_list[i], z_pri, dim=1)
-                similarity_scores.append((sim_score, i))
+        with torch.no_grad():
+            z_pri = gib_feat[self.prim_index]
+            cos_sims = []
+            for i in range(self.task_num):
+                if i == self.prim_index:
+                    cos_sims.append(float('inf')) 
+                else:
+                    sim_i = F.cosine_similarity(z_pri, gib_feat[i], dim=1).mean().item()
+                    cos_sims.append(sim_i)
+            candidate_indices = [i for i, s in enumerate(cos_sims) if s >= self.similarity_threshold and i!=self.prim_index]
+            if len(candidate_indices) < self.min_aux_tasks:
+                sorted_by_sim = sorted(
+                    [i for i in range(self.task_num) if i != self.prim_index],
+                    key=lambda x: cos_sims[x],
+                    reverse=True
+                )
+                candidate_indices = sorted_by_sim[:self.min_aux_tasks]
         
-        similarity_scores.sort(key=lambda x: x[0], reverse=True)
-        filtered_tasks = [idx for score, idx in similarity_scores if score >= 0.7]
-        
-        if len(filtered_tasks) < 3:
-            selected_tasks = similarity_scores[:3]  
-        else:
-            selected_tasks = filtered_tasks
-        
-        selected_feats_list = [gib_feats_list[self.prim_index]] + [gib_feats_list[idx] for idx in selected_tasks]
-        
+        selected_feats_list = [gib_feats_list[self.prim_index]] + [gib_feats_list[idx] for idx in candidate_indices]
         gating_combine_gib = self.compute_gating(bg, node_feats, selected_feats_list, git=False)
-        
-        # 
         if self.return_weight:
             feats_list, atom_weight_list = self.weighted_sum_readout(bg, node_feats)
         else:
@@ -362,7 +341,7 @@ class MTGL_ADMET(nn.Module):
         # 
         Pri_centered_feats_list = []
         Pri_centered_git_feats_list = []
-        for i in range(self.task_num):
+        for i in candidate_indices:
             if i == self.prim_index and self.use_primary_centered_gate == True:
                 Pri_centered_feats_list.append(gating_combine)
                 Pri_centered_git_feats_list.append(gating_combine_gib)
@@ -372,7 +351,7 @@ class MTGL_ADMET(nn.Module):
 
         prediction_all = []
         # Multi-task predictor
-        for i in range(self.task_num):
+        for i in candidate_indices:
             mol_feats = Pri_centered_feats_list[i]
             h1 = self.fc_layers1[i](mol_feats)
             h2 = self.fc_layers2[i](h1)
