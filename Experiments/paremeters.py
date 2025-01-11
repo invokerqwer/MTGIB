@@ -21,7 +21,6 @@ def collate_molgraphs(data):
     bg = dgl.batch(graphs)
     bg.set_n_initializer(dgl.init.zero_initializer)
     bg.set_e_initializer(dgl.init.zero_initializer)
-    # 将 labels 和 mask 转换为 NumPy 数组，然后转换为 PyTorch 张量
     labels = torch.tensor(np.array(labels))
     mask = torch.tensor(np.array(mask))
     return smiles, bg, labels,  mask
@@ -461,7 +460,6 @@ def run_a_train_epoch_heterogeneous(args, epoch, model, data_loader, loss_criter
         elif args.task_class == 'classification':
             losses = []
             for i in range(args.num_tasks_in_use):
-                # 处理分类任务
                 logits_task = logits[:, i]
                 gib_logits_task = gib_logits[:, i]
                 labels_task = labels[:, i]
@@ -475,7 +473,6 @@ def run_a_train_epoch_heterogeneous(args, epoch, model, data_loader, loss_criter
                     loss_sup = torch.mean(loss_criterion_cs[i](logits_task, labels_task) * (mask_task != 0).float())
                     task_loss = loss_sup
                 losses.append(task_loss)
-            # 使用自动加权损失
             loss = awl(*losses)
             total_loss_value += loss.item()
             optimizer.zero_grad()
