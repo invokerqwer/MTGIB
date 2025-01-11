@@ -7,9 +7,6 @@ import pandas as pd
 
 import sys
 import os
-
-
-# 添加当前脚本目录的父目录到sys.path
 sys.path.append('/home/*/project/MTGL-ADMET/')
 sys.path.append('/home/*/project/MTGL-ADMET/Experiments')
 import logging
@@ -28,11 +25,8 @@ import logging
 
 import sys
 import os
-# 配置日志记录
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-# 生成随机数
 random_number = random.randint(1000, 9999)
-# 合并时间戳和随机数，生成唯一的日志文件名
 log_filename = f"./Log/{timestamp}_{random_number}.log"
 os.makedirs(os.path.dirname(log_filename), exist_ok=True)
 logging.basicConfig(filename=log_filename, level=logging.INFO, 
@@ -44,7 +38,6 @@ console.setFormatter(formatter)
 logging.getLogger('').addHandler(console)
 
 
-# 解析命令行参数
 def parse_args():
     parser = argparse.ArgumentParser(description='Run MTGL_ADMET with specified task list.')
     parser.add_argument('--select_task_list', type=str, nargs='+', default=[], help='List of selected tasks')
@@ -58,22 +51,18 @@ def parse_args():
     parser.add_argument('--num_epochs', type=int, default=300, help='Number of epochs')
     parser.add_argument('--patience', type=int, default=50, help='Patience for early stopping')
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
-    # 在 parse_args() 中添加新的超参数
     parser.add_argument('--in_feats', type=int, default=40, help='Input feature dimension')
     parser.add_argument('--hidden_feats', type=int, default=64, help='Hidden feature dimension')
     parser.add_argument('--conv2_out_dim', type=int, default=128, help='Output dimension of the second convolutional layer')
     parser.add_argument('--gnn_out_feats', type=int, default=64, help='GNN output feature dimension')
     parser.add_argument('--dropout', type=float, default=0.5, help='Dropout rate')
     parser.add_argument('--classifier_hidden_feats', type=int, default=128, help='Hidden feature dimension of the classifier')
-    # 在 parse_args() 中添加新的超参数
     parser.add_argument('--times', type=int, default=1, help='Number of times to run the experiment')
     parser.add_argument('--beta', type=float, default=0.0001, help='KL loss coefficient for GIB module')
 
     return parser.parse_args()
 
-# 直接将解析结果赋值给 args
 args = parse_args()
-# 现在你可以通过 args.xxx 来访问所有解析的参数
 args.device = f"cuda:{args.device}" if torch.cuda.is_available() else "cpu"
 args.atom_data_field = 'atom'
 args.classification_metric_name = 'roc_auc'
@@ -84,11 +73,6 @@ args.data_name = 'admet'
 args.bin_path = './Data/admet.bin'
 args.group_path = './Data/admet_group.csv'
 args.select_task_list = args.select_task_list or ['CYP2C9', 'CYP2D6', 'ESOL', 'logD']
-
-# selected task, generate select task index, task class, and classification_num
-# args.select_task_list'] = ['Respiratory toxicity','CYP2C9', 'CYP2D6', 'Caco-2 permeability','PPB']  # change
-
-args.select_task_index = []
 args.classification_num = 0
 args.regression_num = 0
 
@@ -98,9 +82,7 @@ args.all_task_list = ['HIA','OB','p-gp inhibitor','p-gp substrates',	'BBB',
                             'CYP1A2', 'CYP2C19', 'CYP2C9', 'CYP2D6', 'CYP3A4',
                             'Acute oral toxicity (LD50)','IGC50','ESOL','logD',	'Caco-2 permeability','PPB']  # change
 
-# select_task_list 是初始给定的多任务列表， select_task_name是实际执行时的任务列表，select_task_index是实际执行的任务列表的index
 args.select_task_name = []
-# generate select task index
 for index, task in enumerate(args.all_task_list):
     if task in args.select_task_list:
         args.select_task_index.append(index)
@@ -113,14 +95,12 @@ PRIMARY_TASK = args.select_task_list[0]
 PRIMARY_TASK_INDEX = args.select_task_name.index(PRIMARY_TASK)
 logging.info(f"Primary Task: {PRIMARY_TASK}, Index: {PRIMARY_TASK_INDEX}")
 
-# generate classification_num
 for task in args.select_task_list:
     if task in ("Caco-2 permeability","PPB","Acute oral toxicity (LD50)","IGC50","ESOL","logD"):
         args.regression_num = args.regression_num + 1
     else:
         args.classification_num = args.classification_num + 1
 
-# generate classification_num
 if args.classification_num != 0 and args.regression_num != 0:
     args.task_class = 'classification_regression'
 if args.classification_num != 0 and args.regression_num == 0:
@@ -193,43 +173,30 @@ for time_id in range(args.times):
         for param in awl.parameters():
             param_array = param.data.cpu().numpy()
             if param_array.size == 1:
-                weight_values.append(param_array.item())  # 如果是标量，则转换为标量
+                weight_values.append(param_array.item()) 
             else:
-                weight_values.extend(param_array.flatten())  # 如果不是标量，展开成一维数组后添加到列表中
+                weight_values.extend(param_array.flatten()) 
 
-        # 确保数据列表长度和DataFrame列数匹配
         training_log.loc[epoch] = [epoch + 1, total_loss] + weight_values
 
-
-        # Validation and early stop
         validation_result = run_an_eval_epoch_heterogeneous(args, model, val_loader)
         
-        # Assuming the primary task's validation result is the first element
         if len(validation_result) == 1:
-            # If there's only one task, use its validation result directly
             weighted_val_score = validation_result[0]
         else:
-            primary_task_index = PRIMARY_TASK_INDEX  # 使用 PRIMARY_TASK_INDEX 作为主要任务的索引
+            primary_task_index = PRIMARY_TASK_INDEX 
             primary_task_weight = 0.7
             other_tasks_weight = (1 - primary_task_weight) / (len(validation_result) - 1)
             weighted_val_score = primary_task_weight * validation_result[primary_task_index] + other_tasks_weight * sum(validation_result[:primary_task_index] + validation_result[primary_task_index+1:])
 
         early_stop = stopper.step(weighted_val_score, model)
         logging.info(f'epoch {epoch + 1}/{args.num_epochs}, weighted validation {weighted_val_score:.4f}, best weighted validation {stopper.best_score:.4f} validation result: {validation_result}')
-        # val_score = np.mean(validation_result)
-        # Use primary task's validation result for early stopping
-        # early_stop = stopper.step(val_score, model)
-        
-        # primary_task_val_score = validation_result[0]
-        # early_stop = stopper.step(primary_task_val_score, model)
-        # logging.info(f'epoch {epoch + 1}/{args.num_epochs},primary validation {primary_task_val_score:.4f},primary best validation {stopper.best_score:.4f} validation result: {validation_result}')
         if early_stop:
             break
     stopper.load_checkpoint(model)
     test_score = run_an_eval_epoch_heterogeneous(args, model, test_loader)
     train_score = run_an_eval_epoch_heterogeneous(args, model, train_loader)
     val_score = run_an_eval_epoch_heterogeneous(args, model, val_loader)
-    # deal result
     result = train_score + ['training'] + val_score + ['valid'] + test_score + ['test']
     result_pd.loc[time_id] = result
     logging.info(f'********************************{args.task_name}, {time_id+1}_times_result*******************************')
@@ -242,16 +209,13 @@ for time_id in range(args.times):
     logging.info(f"Uncertainty weight params values: {[param.data.cpu().numpy() for param in awl.parameters()]}")
     logging.info(f'use gib module: {args.use_gib}')
     logging.info(f'use primary centered gate: {args.use_primary_centered_gate}')
-    logging.info(f'hidden_feats：{args.hidden_feats},conv2_out_dim:{args.conv2_out_dim}, gnn_out_feats:{args.gnn_out_feats},dropout:{args.dropout},bs:{args.batch_size},lr:{args.lr},beta:{args.beta}')
+    logging.info(f'hidden_feats:{args.hidden_feats},conv2_out_dim:{args.conv2_out_dim}, gnn_out_feats:{args.gnn_out_feats},dropout:{args.dropout},bs:{args.batch_size},lr:{args.lr},beta:{args.beta}')
 
-# 生成文件名
 filename = f"./Result/folder1/{PRIMARY_TASK}_gib{args.use_gib}_unc{args.use_uncertainty}_gate{args.use_primary_centered_gate}_bs{args.batch_size}_drpo_{args.dropout}_res_{timestamp}_{random_number}.csv"
 result_pd.to_csv(filename, index=None)
 logging.info(f"Results saved to {filename}")
 logging.info(f"Logs saved to {log_filename}")
 logging.info(f"Model saved to {model_save_path}")
-
-# 保存训练过程数据到CSV文件
 training_log_filename = f"./Result/training_log_{timestamp}_{random_number}.csv"
 training_log.to_csv(training_log_filename, index=False)
 logging.info(f"Training log saved to {training_log_filename}")
