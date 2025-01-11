@@ -420,15 +420,13 @@ def run_a_train_epoch_heterogeneous(args, epoch, model, data_loader, loss_criter
             labels_r = labels[:,args.classification_num:]
             mask_r = mask[:,args.classification_num:]
             
-            # 初始化列表用于存储每个任务的损失
             losses = []
             for i in range(args.num_tasks_in_use):
                 if i < args.classification_num:
-                    # 处理分类任务
-                    logits_task = logits[:, i].unsqueeze(1)  # 确保 logits_task 形状为 (batch_size, 1)
-                    gib_logits_task = gib_logits[:, i].unsqueeze(1)  # 确保 logits_task 形状为 (batch_size, 1)
-                    labels_task = labels[:, i].unsqueeze(1)  # 确保 labels_task 形状为 (batch_size, 1)
-                    mask_task = mask[:, i].unsqueeze(1)      # 确保 mask_task 形状为 (batch_size, 1)
+                    logits_task = logits[:, i].unsqueeze(1) 
+                    gib_logits_task = gib_logits[:, i].unsqueeze(1) 
+                    labels_task = labels[:, i].unsqueeze(1) 
+                    mask_task = mask[:, i].unsqueeze(1)     
                     if args.use_gib == True:
                         loss_sup = torch.mean(loss_criterion_cs[i](logits_task, labels_task) * (mask_task != 0).float())
                         loss_pred = torch.mean(loss_criterion_cs[i](gib_logits_task, labels_task) * (mask_task != 0).float())
@@ -438,11 +436,10 @@ def run_a_train_epoch_heterogeneous(args, epoch, model, data_loader, loss_criter
                         loss_sup = torch.mean(loss_criterion_cs[i](logits_task, labels_task) * (mask_task != 0).float())
                         task_loss = loss_sup
                 else:
-                    # 处理回归任务
-                    logits_task = logits[:, i].unsqueeze(1)  # 确保 logits_task 形状为 (batch_size, 1)
-                    gib_logits_task = gib_logits[:, i].unsqueeze(1)  # 确保 logits_task 形状为 (batch_size, 1)
-                    labels_task = labels[:, i].unsqueeze(1)  # 确保 labels_task 形状为 (batch_size, 1)
-                    mask_task = mask[:, i].unsqueeze(1)      # 确保 mask_task 形状为 (batch_size, 1)
+                    logits_task = logits[:, i].unsqueeze(1) 
+                    gib_logits_task = gib_logits[:, i].unsqueeze(1)  
+                    labels_task = labels[:, i].unsqueeze(1) 
+                    mask_task = mask[:, i].unsqueeze(1)     
                     if args.use_gib == True:
                         loss_sup = torch.mean(loss_criterion_r(logits_task, labels_task) * (mask_task != 0).float())
                         loss_pred = torch.mean(loss_criterion_r(gib_logits_task, labels_task) * (mask_task != 0).float())
@@ -452,7 +449,6 @@ def run_a_train_epoch_heterogeneous(args, epoch, model, data_loader, loss_criter
                         loss_sup = torch.mean(loss_criterion_r(logits_task, labels_task) * (mask_task != 0).float())
                         task_loss = loss_sup
                 losses.append(task_loss)
-            # 使用自动加权损失
             loss = awl(*losses)
             total_loss_value += loss.item()
             optimizer.zero_grad()
@@ -491,7 +487,6 @@ def run_a_train_epoch_heterogeneous(args, epoch, model, data_loader, loss_criter
         else:
             losses = []
             for i in range(args.num_tasks_in_use):
-                # 处理分类任务
                 logits_task = logits[:, i]
                 gib_logits_task = gib_logits[:, i]
                 labels_task = labels[:, i]
@@ -505,7 +500,6 @@ def run_a_train_epoch_heterogeneous(args, epoch, model, data_loader, loss_criter
                     loss_sup = torch.mean(loss_criterion_r(logits_task, labels_task) * (mask_task != 0).float())
                     task_loss = loss_sup
                 losses.append(task_loss)
-            # 使用自动加权损失
             loss = awl(*losses)
             total_loss_value += loss.item()
             optimizer.zero_grad()
