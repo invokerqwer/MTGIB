@@ -1,11 +1,6 @@
 import sys
 import os
-
-# 添加当前脚本目录的父目录到sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from Data.data_prepare import *
-
 args={}
 args['input_csv'] = './Data/admet.csv'
 args['output_bin'] = './Data/admet.bin'
