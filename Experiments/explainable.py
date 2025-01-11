@@ -21,7 +21,6 @@ import sys
 import os
 
 
-# 添加当前脚本目录的父目录到sys.path
 sys.path.append('/home/*/project/MTGL-ADMET/')
 sys.path.append('/home/*/project/MTGL-ADMET/Experiments')
 import logging
@@ -40,11 +39,8 @@ import logging
 
 import sys
 import os
-# 配置日志记录
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-# 生成随机数
 random_number = random.randint(1000, 9999)
-# 合并时间戳和随机数，生成唯一的日志文件名
 log_filename = f"./Log/{timestamp}_{random_number}.log"
 os.makedirs(os.path.dirname(log_filename), exist_ok=True)
 logging.basicConfig(filename=log_filename, level=logging.INFO, 
@@ -55,10 +51,6 @@ formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 console.setFormatter(formatter)
 logging.getLogger('').addHandler(console)
 
-
-
-
-# 解析命令行参数
 def parse_args():
     parser = argparse.ArgumentParser(description='Run MTGL_ADMET with specified task list.')
     parser.add_argument('--select_task_list', type=str, nargs='+', default=[], help='List of selected tasks')
@@ -72,14 +64,12 @@ def parse_args():
     parser.add_argument('--num_epochs', type=int, default=300, help='Number of epochs')
     parser.add_argument('--patience', type=int, default=50, help='Patience for early stopping')
     parser.add_argument('--batch_size', type=int, default=128, help='Batch size for training')
-    # 在 parse_args() 中添加新的超参数
     parser.add_argument('--in_feats', type=int, default=40, help='Input feature dimension')
     parser.add_argument('--hidden_feats', type=int, default=64, help='Hidden feature dimension')
     parser.add_argument('--conv2_out_dim', type=int, default=128, help='Output dimension of the second convolutional layer')
     parser.add_argument('--gnn_out_feats', type=int, default=64, help='GNN output feature dimension')
     parser.add_argument('--dropout', type=float, default=0.5, help='Dropout rate')
     parser.add_argument('--classifier_hidden_feats', type=int, default=128, help='Hidden feature dimension of the classifier')
-    # 在 parse_args() 中添加新的超参数
     parser.add_argument('--times', type=int, default=1, help='Number of times to run the experiment')
     parser.add_argument('--beta', type=float, default=0.0001, help='KL loss coefficient for GIB module')
     parser.add_argument('--model_save_path', type=str, default=None, help='model_save_path')
@@ -105,7 +95,6 @@ args.select_task_list = args.select_task_list or ['CYP2C9', 'CYP2D6', 'ESOL', 'l
 # args.gnn_out_feats = 128
 # args.dropout= 0.2
 # args.beta= 1e-1 
-PATH = './Model_Save/new/admet_early_stop_20240815_131611_9747.pth'
 PATH = args.model_save_path
 
 # args.select_task_list = ['Caco-2 permeability', 'OB' ,'ESOL']
@@ -121,7 +110,6 @@ args.all_task_list = ['HIA','OB','p-gp inhibitor','p-gp substrates',	'BBB',
                             'CYP1A2', 'CYP2C19', 'CYP2C9', 'CYP2D6', 'CYP3A4',
                             'Acute oral toxicity (LD50)','IGC50','ESOL','logD',	'Caco-2 permeability','PPB']  # change
 
-# select_task_list 是初始给定的多任务列表， select_task_name是实际执行时的任务列表，select_task_index是实际执行的任务列表的index
 args.select_task_name = []
 # generate select task index
 for index, task in enumerate(args.all_task_list):
